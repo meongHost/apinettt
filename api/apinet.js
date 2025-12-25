@@ -68,6 +68,15 @@ function readJSONSafe(file, def = {}) {
 }
 
 /* ================= ENDPOINT ================= */
+app.get("/apiinet", (req, res) => {
+  res.json({
+    status: "ok",
+    message: "APINET endpoint aktif",
+    method: "GET",
+    time: new Date().toISOString()
+  });
+});
+  
 app.post("/apinet", async (req, res) => {
   try {
     const ip = getIP(req);
