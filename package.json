@@ -1,11 +1,14 @@
-{
+ {
   "name": "meonghost",
   "version": "1.0.0",
-  "type": "module",
   "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node api/apinet.js"
+  },
   "dependencies": {
     "express": "^4.19.2",
     "node-fetch": "^3.3.2",
     "dotenv": "^16.4.5"
   }
-}
+ }
