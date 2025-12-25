@@ -77,7 +77,7 @@ app.get("/apiinet", (req, res) => {
   });
 });
   
-app.post("/apinet", async (req, res) => {
+app.post("/net", async (req, res) => {
   try {
     const ip = getIP(req);
     const ua = (req.headers["user-agent"] || "").toLowerCase();
