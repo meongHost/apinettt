@@ -68,7 +68,7 @@ function readJSONSafe(file, def = {}) {
 }
 
 /* ================= ENDPOINT ================= */
-app.get("/apiinet", (req, res) => {
+app.get("/", (req, res) => {
   res.json({
     status: "ok",
     message: "APINET endpoint aktif",
@@ -76,8 +76,10 @@ app.get("/apiinet", (req, res) => {
     time: new Date().toISOString()
   });
 });
+
+
   
-app.post("/net", async (req, res) => {
+app.post("/", async (req, res) => {
   try {
     const ip = getIP(req);
     const ua = (req.headers["user-agent"] || "").toLowerCase();
