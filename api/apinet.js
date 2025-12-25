@@ -1,6 +1,4 @@
-export const config = {
-  runtime: "nodejs18.x"
-};
+
 
 import express from "express";
 import crypto from "crypto";
